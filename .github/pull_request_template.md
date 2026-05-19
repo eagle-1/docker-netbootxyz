@@ -39,12 +39,15 @@
 ```
 
 ## Test Images
-<!-- Automated test images will be built and commented on this PR -->
-Once the build completes, test images will be available:
+<!-- For same-repo PRs, automated test images will be built and commented on this PR. -->
+<!-- For fork PRs, only build verification runs (no image is pushed). See CONTRIBUTING.md for the maintainer publish flow. -->
+For same-repo PRs, once the build completes, test images will be available:
 - `netbootxyz/netbootxyz:pr-{number}`
 - `ghcr.io/netbootxyz/netbootxyz:pr-{number}`
 
 See the auto-generated comment below for pull and test commands.
+
+For fork PRs, the build runs as a verification only and produces no image — a maintainer must publish a test image after review. See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
 
 ## Checklist
 - [ ] My code follows the style of this project
