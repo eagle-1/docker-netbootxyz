@@ -21,6 +21,7 @@ jobs:
     outputs:
       tag_suffix: ${{ steps.tags.outputs.tag_suffix }}
       is_pr: ${{ steps.tags.outputs.is_pr }}
+      is_fork: ${{ steps.tags.outputs.is_fork }}
       webapp_release: ${{ steps.webapp.outputs.webapp_release }}
       build_date: ${{ steps.tags.outputs.build_date }}
     steps:
@@ -36,10 +37,17 @@ jobs:
         EVENT_NAME: ${{ github.event_name }}
         PR_NUMBER: ${{ github.event.number }}
         INPUT_TAG_SUFFIX: ${{ github.event.inputs.tag_suffix }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        BASE_REPO: ${{ github.repository }}
       run: |
         if [ "$EVENT_NAME" == "pull_request" ]; then
           echo "tag_suffix=pr-${PR_NUMBER}" >> $GITHUB_OUTPUT
           echo "is_pr=true" >> $GITHUB_OUTPUT
+          if [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "is_fork=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_fork=false" >> $GITHUB_OUTPUT
+          fi
         elif [ "$EVENT_NAME" == "workflow_dispatch" ]; then
           if [ -n "$INPUT_TAG_SUFFIX" ]; then
             SANITIZED=$(echo "$INPUT_TAG_SUFFIX" | tr -cd '[:alnum:]-_' | cut -c1-50)
@@ -52,6 +60,7 @@ jobs:
             echo "tag_suffix=test-$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
           fi
           echo "is_pr=false" >> $GITHUB_OUTPUT
+          echo "is_fork=false" >> $GITHUB_OUTPUT
         else
           echo "::error::Unsupported event type: $EVENT_NAME"
           exit 1
@@ -71,12 +80,14 @@ jobs:
       uses: docker/setup-buildx-action@v4
 
     - name: Login to the Docker Container Registry
+      if: needs.setup.outputs.is_fork != 'true'
       uses: docker/login-action@v4
       with:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Login to the GitHub Container Registry
+      if: needs.setup.outputs.is_fork != 'true'
       uses: docker/login-action@v4
       with:
         registry: ghcr.io
@@ -84,6 +95,7 @@ jobs:
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build and push (amd64)
+      if: needs.setup.outputs.is_fork != 'true'
       id: build
       uses: docker/build-push-action@v7
       with:
@@ -102,13 +114,31 @@ jobs:
           org.opencontainers.image.source=https://github.com/netbootxyz/docker-netbootxyz
         outputs: type=image,name=ghcr.io/netbootxyz/netbootxyz,push-by-digest=true,name-canonical=true,push=true
 
+    # Fork PRs cannot access registry secrets — verify the Dockerfile builds
+    # cleanly without pushing. Maintainers can manually trigger a publishing
+    # build via workflow_dispatch after reviewing the PR.
+    - name: Build (amd64, fork PR — no push)
+      if: needs.setup.outputs.is_fork == 'true'
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/amd64
+        push: false
+        build-args: |
+          WEBAPP_VERSION=${{ needs.setup.outputs.webapp_release }}
+          VERSION=${{ needs.setup.outputs.tag_suffix }}
+          BUILD_DATE=${{ needs.setup.outputs.build_date }}
+
     - name: Export digest
+      if: needs.setup.outputs.is_fork != 'true'
       run: |
         mkdir -p /tmp/digests
         digest="${{ steps.build.outputs.digest }}"
         touch "/tmp/digests/${digest#sha256:}"
 
     - name: Upload digest
+      if: needs.setup.outputs.is_fork != 'true'
       uses: actions/upload-artifact@v7
       with:
         name: digests-amd64
@@ -140,12 +170,14 @@ jobs:
       uses: docker/setup-buildx-action@v4
 
     - name: Login to the Docker Container Registry
+      if: needs.setup.outputs.is_fork != 'true'
       uses: docker/login-action@v4
       with:
         username: ${{ secrets.DOCKERHUB_USER }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Login to the GitHub Container Registry
+      if: needs.setup.outputs.is_fork != 'true'
       uses: docker/login-action@v4
       with:
         registry: ghcr.io
@@ -153,6 +185,7 @@ jobs:
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build and push (arm64)
+      if: needs.setup.outputs.is_fork != 'true'
       id: build
       uses: docker/build-push-action@v7
       with:
@@ -171,13 +204,31 @@ jobs:
           org.opencontainers.image.source=https://github.com/netbootxyz/docker-netbootxyz
         outputs: type=image,name=ghcr.io/netbootxyz/netbootxyz,push-by-digest=true,name-canonical=true,push=true
 
+    # Fork PRs cannot access registry secrets — verify the Dockerfile builds
+    # cleanly without pushing. Maintainers can manually trigger a publishing
+    # build via workflow_dispatch after reviewing the PR.
+    - name: Build (arm64, fork PR — no push)
+      if: needs.setup.outputs.is_fork == 'true'
+      uses: docker/build-push-action@v7
+      with:
+        context: .
+        file: ./Dockerfile
+        platforms: linux/arm64
+        push: false
+        build-args: |
+          WEBAPP_VERSION=${{ needs.setup.outputs.webapp_release }}
+          VERSION=${{ needs.setup.outputs.tag_suffix }}
+          BUILD_DATE=${{ needs.setup.outputs.build_date }}
+
     - name: Export digest
+      if: needs.setup.outputs.is_fork != 'true'
       run: |
         mkdir -p /tmp/digests
         digest="${{ steps.build.outputs.digest }}"
         touch "/tmp/digests/${digest#sha256:}"
 
     - name: Upload digest
+      if: needs.setup.outputs.is_fork != 'true'
       uses: actions/upload-artifact@v7
       with:
         name: digests-arm64
@@ -200,6 +251,7 @@ jobs:
 
   manifest:
     needs: [setup, build-amd64, build-arm64]
+    if: needs.setup.outputs.is_fork != 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Set up Docker Buildx
@@ -247,7 +299,7 @@ jobs:
 
   comment:
     needs: [setup, manifest]
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && needs.setup.outputs.is_fork != 'true'
     runs-on: ubuntu-latest
     steps:
     - name: Comment on PR with test instructions
@@ -291,6 +343,46 @@ jobs:
           \`\`\`bash
           docker logs -f netbootxyz-test
           \`\`\`
+
+          ---
+          📦 **SHA:** \`${{ github.sha }}\`
+          🏷️ **Webapp Version:** \`${{ needs.setup.outputs.webapp_release }}\`
+          `;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+  comment-fork:
+    needs: [setup, build-amd64, build-arm64]
+    if: github.event_name == 'pull_request' && needs.setup.outputs.is_fork == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Comment on fork PR with maintainer-trigger instructions
+      uses: actions/github-script@v8
+      with:
+        script: |
+          const comment = `## 🛠️ Build Verified (Fork PR)
+
+          The Dockerfile built cleanly on both \`linux/amd64\` and \`linux/arm64\`. ✅
+
+          No test image was pushed to a registry: GitHub deliberately withholds repository secrets from workflows triggered by fork PRs, so the build cannot authenticate to Docker Hub or GHCR. This is expected — not a bug in your PR.
+
+          ### For maintainers: publishing a test image for this PR
+
+          After reviewing the diff, push the PR head to a branch in this repo and the publishing build will run automatically:
+
+          \`\`\`bash
+          gh pr checkout ${{ github.event.number }}
+          git push origin HEAD:test/pr-${{ github.event.number }}
+          \`\`\`
+
+          Or trigger a one-off manually from the **Actions → build → Run workflow** menu after pushing the branch (optionally set \`tag_suffix\` to label the resulting image).
+
+          See [CONTRIBUTING.md](https://github.com/netbootxyz/docker-netbootxyz/blob/master/CONTRIBUTING.md) for details.
 
           ---
           📦 **SHA:** \`${{ github.sha }}\`
