@@ -17,12 +17,9 @@ PRs opened from a branch in `netbootxyz/docker-netbootxyz` get the full pipeline
 
 ### Fork PRs
 
-PRs opened from a forked repo get a **build-only** verification:
+PRs opened from a forked repo get a **build-only** verification: a multi-arch `linux/amd64` + `linux/arm64` build runs to confirm the Dockerfile is sound, but nothing is pushed and no PR comment is posted. The green check on the PR is the success signal.
 
-1. Multi-arch build for `linux/amd64` and `linux/arm64` (no push).
-2. A comment is posted on the PR confirming the build succeeded and pointing maintainers at the publish steps below.
-
-No image is pushed, because GitHub deliberately withholds repository secrets (Docker Hub / GHCR tokens) from workflow runs triggered by fork PRs. This is a security boundary — without it, any opened PR could exfiltrate the registry credentials.
+No image is pushed because GitHub deliberately withholds repository secrets (Docker Hub / GHCR tokens) from workflow runs triggered by fork PRs. The same sandbox makes the workflow's `GITHUB_TOKEN` read-only for fork PRs, which is why the "image built" comment that same-repo PRs receive cannot be posted on fork PRs. This is a security boundary — without it, any opened PR could exfiltrate credentials.
 
 ## Publishing a test image for a fork PR (maintainers)
 
