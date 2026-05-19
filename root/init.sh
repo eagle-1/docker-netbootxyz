@@ -100,8 +100,9 @@ if [[ ! -f /config/menus/remote/menu.ipxe ]]; then
   curl -o \
     /config/menus/remote/netboot.xyz-arm64-snponly.efi -sL \
     "https://github.com/netbootxyz/netboot.xyz/releases/download/${MENU_VERSION}/netboot.xyz-arm64-snponly.efi"
-  # cleanup
+  # layer and cleanup
   echo -n "${MENU_VERSION}" > /config/menuversion.txt
+  cp -r /config/menus/remote/* /config/menus
   rm -f /tmp/menus.tar.gz
 fi
 
@@ -149,6 +150,12 @@ if [[ ! -d /config/menus/remote/secureboot-x86_64 ]]; then
       else
         echo "[netbootxyz-init] autoexec.ipxe not available for ${MENU_VERSION}, skipping"
       fi
+      # layer Secure Boot directories into /config/menus
+      shopt -s nullglob
+      for sbdir in /config/menus/remote/secureboot-*/; do
+        cp -r "$sbdir" /config/menus/
+      done
+      shopt -u nullglob
     else
       echo "[netbootxyz-init] Failed to extract iPXE Secure Boot archive, skipping"
     fi
@@ -156,26 +163,6 @@ if [[ ! -d /config/menus/remote/secureboot-x86_64 ]]; then
   else
     echo "[netbootxyz-init] iPXE Secure Boot archive not available, skipping"
   fi
-fi
-
-# Apply menu layering: remote files first, then local overrides on top
-# This mirrors the webapp's layermenu() function and ensures user
-# customizations (boot.cfg, local-vars.ipxe, etc.) persist across
-# container restarts
-echo "[netbootxyz-init] Applying menu layers..."
-for file in /config/menus/remote/*; do
-  [ -f "$file" ] && cp "$file" /config/menus/
-done
-# Copy Secure Boot subdirectories if present
-shopt -s nullglob
-for sbdir in /config/menus/remote/secureboot-*/; do
-  cp -r "$sbdir" /config/menus/
-done
-shopt -u nullglob
-if [ -d /config/menus/local ]; then
-  for file in /config/menus/local/*; do
-    [ -f "$file" ] && cp "$file" /config/menus/
-  done
 fi
 
 # Ownership
