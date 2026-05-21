@@ -100,6 +100,19 @@ if [[ ! -f /config/menus/remote/menu.ipxe ]]; then
   curl -o \
     /config/menus/remote/netboot.xyz-arm64-snponly.efi -sL \
     "https://github.com/netbootxyz/netboot.xyz/releases/download/${MENU_VERSION}/netboot.xyz-arm64-snponly.efi"
+  # legacy boot files (no USB NIC drivers; preserve USB keyboard support on some
+  # BIOS/UEFI firmware -- https://netboot.xyz/docs/kb/hardware/usb-keyboard/).
+  # These assets only exist in 3.x and later releases, so download them only when
+  # the selected release provides them and skip gracefully otherwise.
+  for legacy_file in netboot.xyz-legacy.kpxe netboot.xyz-legacy.efi; do
+    if curl -o "/config/menus/remote/${legacy_file}" -fsSL \
+      "https://github.com/netbootxyz/netboot.xyz/releases/download/${MENU_VERSION}/${legacy_file}"; then
+      echo "[netbootxyz-init] Downloaded ${legacy_file}"
+    else
+      echo "[netbootxyz-init] ${legacy_file} not available for ${MENU_VERSION}, skipping"
+      rm -f "/config/menus/remote/${legacy_file}"
+    fi
+  done
   # layer and cleanup
   echo -n "${MENU_VERSION}" > /config/menuversion.txt
   cp -r /config/menus/remote/* /config/menus

@@ -223,6 +223,8 @@ The following bootfile names can be set as the boot file in the DHCP configurati
 | `netboot.xyz.efi` | UEFI boot image file, uses built-in UEFI NIC drivers |
 | `netboot.xyz-snp.efi` | UEFI w/ Simple Network Protocol, attempts to boot all net devices |
 | `netboot.xyz-snponly.efi` | UEFI w/ Simple Network Protocol, only boots from device chained from |
+| `netboot.xyz-legacy.kpxe` | Legacy BIOS boot image without USB NIC drivers; use if your USB keyboard stops working in the menu ([details](https://netboot.xyz/docs/kb/hardware/usb-keyboard/)) |
+| `netboot.xyz-legacy.efi` | UEFI boot image without USB NIC drivers; use if your USB keyboard stops working in the menu ([details](https://netboot.xyz/docs/kb/hardware/usb-keyboard/)) |
 | `netboot.xyz-arm64.efi` | DHCP EFI boot image file, uses built-in iPXE NIC drivers |
 | `netboot.xyz-arm64-snp.efi` | UEFI w/ Simple Network Protocol, attempts to boot all net devices |
 | `netboot.xyz-arm64-snponly.efi` | UEFI w/ Simple Network Protocol, only boots from device chained from |
